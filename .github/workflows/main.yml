@@ -9,21 +9,31 @@ jobs:
     steps:
     - name: Download ngrok
       run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-    
+
     - name: Extract ngrok
       run: Expand-Archive -Path ngrok.zip -DestinationPath ngrok
-    
+
     - name: Authenticate ngrok
       run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-    
+
     - name: Enable Remote Desktop
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+
+    - name: Configure Firewall for RDP
+      run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: Set Password for runneradmin User
+      run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+
+    - name: Start ngrok HTTP Tunnel
+      run: .\ngrok\ngrok.exe http 3389
+
+    - name: Display ngrok URL
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
-    
-    - name: Create Tunnel
-      run: .\ngrok\ngrok.exe tcp 3389
+        $ngrokApiUrl = "http://127.0.0.1:4040/api/tunnels"
+        $ngrokTunnels = Invoke-RestMethod -Uri $ngrokApiUrl
+        $publicUrl = $ngrokTunnels.tunnels[0].public_url
+        Write-Host "ngrok URL: $publicUrl"
+        
